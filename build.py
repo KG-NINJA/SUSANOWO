@@ -1,9 +1,10 @@
 from pathlib import Path
+import re
 import zipfile
 
 p = Path(__file__).resolve().parent
 html = (p / 'index.html').read_text()
-html = html.replace('<link rel="stylesheet" href="style.css">', '<style>' + (p / 'style.css').read_text() + '</style>')
+html = re.sub(r'<link rel="stylesheet" href="style\.css(?:\?[^"]*)?">', lambda _: '<style>' + (p / 'style.css').read_text() + '</style>', html)
 for name in ['engine.js', 'animation.js', 'audio.js', 'view.js', 'app.js']:
     html = html.replace('<script src="' + name + '"></script>', '<script>' + (p / name).read_text().replace('</script', '<\\/script') + '</script>')
 (p / 'yakumo-no-tachi.html').write_text(html)
