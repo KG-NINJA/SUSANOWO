@@ -205,3 +205,17 @@ function duel(){const g=new Saga();g.player.x=680;g.enemies[0].x=872;for(const e
   assert.equal(JSON.stringify({pose:a.pose,belt:a.belt,trail:a.trail,skeleton:a.skeleton}),before);
 }
 console.log('PASS: acceleration/braking/reversal, rendered foot contacts at 30/60/120 Hz, jump anticipation/landing absorption, sword combat, parry, pits and traps, paused animation, one crow, all terrain crossed, eight heads, offering, deterministic complete story and finite anatomy.');
+
+// The second forest encounter emerges simultaneously on both sides, once only.
+{
+ const g=new Saga(),pair=g.enemies.filter(e=>e.spawnAt===1500);
+ assert.equal(pair.length,2);g.enemies[0].defeated=true;g.enemies[0].hp=0;
+ g.player.x=1499;tick(g,1);assert(pair.every(e=>e.pending&&!e.active));assert.equal(g.enemy(),null);
+ g.player.x=1500;g.drainEvents();tick(g,1);
+ assert(pair.every(e=>!e.pending&&e.active&&e.hp===70));
+ assert(pair[0].x<g.player.x&&pair[1].x>g.player.x);assert.equal(pair[0].dir,1);assert.equal(pair[1].dir,-1);
+ const events=g.drainEvents().filter(e=>e.type==='encounter');assert.equal(events.length,2);assert.equal(events[0].time,events[1].time);
+ assert(pair.every(e=>!g.pitAt(e.x)));tick(g,1);assert.equal(g.drainEvents().filter(e=>e.type==='encounter').length,0);
+ pair[0].defeated=true;pair[0].hp=0;assert.equal(g.enemy(),pair[1]);
+ const checkpoint=new Saga({checkpoint:1});assert(checkpoint.enemies.filter(e=>e.spawnAt).every(e=>e.defeated));
+}
