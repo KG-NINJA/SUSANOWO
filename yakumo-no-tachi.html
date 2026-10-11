@@ -151,7 +151,8 @@
   ];
   const ENEMIES=[
     {x:860,name:'穢れの刀影',hp:100,chapter:0,style:'shade',color:'ash'},
-    {x:1560,name:'樹骸の守り手',hp:140,chapter:0,style:'ward',color:'moss'},
+    {x:1560,name:'樹骸の守り手',hp:70,chapter:0,style:'ward',color:'moss',spawnAt:1500,spawnSide:-1},
+    {x:1560,name:'樹骸の守り手',hp:70,chapter:0,style:'ward',color:'moss',spawnAt:1500,spawnSide:1},
     {x:2600,name:'祠を喰む鬼影',hp:125,chapter:1,style:'swift',color:'rust'},
     {x:3320,name:'夜祭の荒武者',hp:165,chapter:1,style:'brute',color:'bone'}
   ];
@@ -192,8 +193,8 @@
     constructor(options={}){
       this.demo=!!options.demo;this.difficulty=options.difficulty||'normal';this.chapter=options.checkpoint||0;
       this.player=fighter({x:CHAPTERS[this.chapter].spawn,name:'須佐之男命',active:true});
-      this.enemies=ENEMIES.map((e,id)=>fighter(Object.assign({},e,{id,maxHp:e.hp,dir:-1,team:'enemy',
-        defeated:e.chapter<this.chapter,hp:e.chapter<this.chapter?0:e.hp,action:e.chapter<this.chapter?'dead':'idle',aiTimer:.65+id*.13})));
+      this.enemies=ENEMIES.map((e,id)=>fighter(Object.assign({},e,{id,maxHp:e.hp,pending:!!e.spawnAt,dir:-1,team:'enemy',
+        defeated:e.chapter<this.chapter,hp:e.chapter<this.chapter?0:e.hp,action:e.chapter<this.chapter?'dead':'idle',aiTimer:.65+(id>2?id-1:id)*.13})));
       this.boss=serpent();this.offering=this.chapter===2;this.comb=this.chapter>0;this.storm=0;
       this.phase='playing';this.time=0;this.realTime=0;this.events=[];this.hitstop=0;this.slowTimer=0;
       this.endAge=0;this.ritualAge=0;this.introAge=0;this.storyStep=-1;this.attackSerial=0;
@@ -215,7 +216,7 @@
       f.walk=(GAIT.stance-.5)*Math.PI*2-f.walk;
     }
     free(f){return ['idle','walk','guard','crouch','jump'].includes(f.action);}
-    enemy(){return this.enemies.filter(e=>!e.defeated&&e.chapter===this.chapter).sort((a,b)=>Math.abs(a.x-this.player.x)-Math.abs(b.x-this.player.x))[0]||null;}
+    enemy(){return this.enemies.filter(e=>!e.defeated&&!e.pending&&e.chapter===this.chapter).sort((a,b)=>Math.abs(a.x-this.player.x)-Math.abs(b.x-this.player.x))[0]||null;}
     targetHead(){return this.boss.heads.find(h=>['warn','strike','open'].includes(h.phase))||null;}
     pitAt(x){return this.pits.find(p=>x>p.x&&x<p.x+p.width)||null;}
     request(f,name){
@@ -396,7 +397,7 @@
       if(c.phase==='gone')return;
       if(c.phase==='retreat'){c.dir=1;c.x+=dt*270;c.y+=dt*180;if(c.t>2.4)c.phase='gone';return;}
       if(!c.active){
-        if(this.chapter!==0||p.x<1660||this.enemy())return;
+        if(this.chapter!==0||p.x<1660||this.enemies.some(e=>!e.defeated&&e.chapter===0))return;
         c.active=true;c.phase='circle';c.t=0;c.cycles=0;
         this.emit('crowEncounter',{x:c.x,name:'禍つ黒羽'});this.emit('story',{speaker:'禍つ黒羽',text:'一羽のカラスが道を塞ぐ。羽ばたきの予兆を見切り、低く舞う隙を斬れ。',duration:4.5});
         this.prompt='黒羽の急降下を受け流し、低く飛ぶ隙を斬れ。';
@@ -607,14 +608,21 @@
       const controls=this.demo?this.autoPlayer():input;
       if(controls.interact&&this.interact())return;
       this.controls(p,controls,dt);
+      // Both guards emerge on the same frame, on safe ground beyond the forest pit.
       for(const e of this.enemies){
-        if(!e.defeated&&e.chapter===this.chapter&&Math.abs(e.x-p.x)<540&&!e.active){e.active=true;this.emit('encounter',{name:e.name});}
+        if(e.pending&&!e.defeated&&e.chapter===this.chapter&&p.x>=e.spawnAt&&Math.abs(p.y)<1){
+          e.pending=false;e.active=true;e.x=p.x+e.spawnSide*200;e.safeX=e.x;e.dir=-e.spawnSide;e.aiTimer=.8;
+          this.emit('encounter',{name:e.name,side:e.spawnSide});
+        }
+      }
+      for(const e of this.enemies){
+        if(!e.defeated&&!e.pending&&e.chapter===this.chapter&&Math.abs(e.x-p.x)<540&&!e.active){e.active=true;this.emit('encounter',{name:e.name});}
         this.enemyAI(e,dt);
       }
       this.updateFighter(p,dt);
       if(this.pitScene)return;
       for(const e of this.enemies){
-        this.updateFighter(e,dt);if(e.defeated||e.chapter!==this.chapter)continue;
+        if(e.pending)continue;this.updateFighter(e,dt);if(e.defeated||e.chapter!==this.chapter)continue;
         const dx=e.x-p.x;if(Math.abs(dx)<68&&Math.abs(e.y-p.y)<70&&p.invincible<=0){const d=(68-Math.abs(dx))*(dx>=0?1:-1)/2;e.x+=d;p.x-=d;}
         const m=MOVES[p.action],n=MOVES[e.action];
         if(m&&!p.hitUsed&&p.t>=m.active[0]&&p.t<=m.active[1]&&(e.x-p.x)*p.dir>0&&Math.abs(dx)<m.range&&Math.abs(e.y-p.y)<120)this.hitEnemy(e,p.action);
@@ -1402,7 +1410,7 @@ class YakumoAudio{
       for(const x of [220,1320,2030,2860,3590,3960,4710,5820])this.stoneLamp(c,x);
       if(game.chapter===0&&!game.attract)this.woman(c,405,.82);
       this.serpent(c,game);this.warnings(c,game);
-      const actors=[...game.enemies,game.player];
+      const actors=[...game.enemies.filter(e=>!e.pending),game.player];
       c.save();c.beginPath();c.rect(0,G+8,W,H-G);c.clip();for(const f of actors)if(!game.pitAt(f.x)&&f.y>=0)this.actor(c,f,0,true);c.restore();
       for(const f of actors){
         const pit=f.y< -60&&game.pitAt(f.x);

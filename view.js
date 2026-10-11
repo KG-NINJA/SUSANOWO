@@ -445,7 +445,7 @@
       for(const x of [220,1320,2030,2860,3590,3960,4710,5820])this.stoneLamp(c,x);
       if(game.chapter===0&&!game.attract)this.woman(c,405,.82);
       this.serpent(c,game);this.warnings(c,game);
-      const actors=[...game.enemies,game.player];
+      const actors=[...game.enemies.filter(e=>!e.pending),game.player];
       c.save();c.beginPath();c.rect(0,G+8,W,H-G);c.clip();for(const f of actors)if(!game.pitAt(f.x)&&f.y>=0)this.actor(c,f,0,true);c.restore();
       for(const f of actors){
         const pit=f.y< -60&&game.pitAt(f.x);
