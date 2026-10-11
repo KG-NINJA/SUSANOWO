@@ -151,10 +151,10 @@
   ];
   const ENEMIES=[
     {x:860,name:'穢れの刀影',hp:100,chapter:0,style:'shade',color:'ash'},
-    {x:1560,name:'樹骸の守り手',hp:70,chapter:0,style:'ward',color:'moss',spawnAt:1500,spawnSide:-1},
-    {x:1560,name:'樹骸の守り手',hp:70,chapter:0,style:'ward',color:'moss',spawnAt:1500,spawnSide:1},
+    {x:1560,name:'樹骸の守り手',hp:140,chapter:0,style:'ward',color:'moss'},
     {x:2600,name:'祠を喰む鬼影',hp:125,chapter:1,style:'swift',color:'rust'},
-    {x:3320,name:'夜祭の荒武者',hp:165,chapter:1,style:'brute',color:'bone'}
+    {x:3320,name:'夜祭の荒武者',hp:83,chapter:1,style:'brute',color:'bone',spawnAt:3400,spawnSide:-1},
+    {x:3320,name:'夜祭の荒武者',hp:82,chapter:1,style:'brute',color:'bone',spawnAt:3400,spawnSide:1}
   ];
   const HEAD_NAMES=['壱ノ首','弐ノ首','参ノ首','肆ノ首','伍ノ首','陸ノ首','漆ノ首','捌ノ首'];
   const GAIT={stride:40,stance:.6,scale:1.25,cycle:2*40*1.25/.6};
@@ -194,7 +194,7 @@
       this.demo=!!options.demo;this.difficulty=options.difficulty||'normal';this.chapter=options.checkpoint||0;
       this.player=fighter({x:CHAPTERS[this.chapter].spawn,name:'須佐之男命',active:true});
       this.enemies=ENEMIES.map((e,id)=>fighter(Object.assign({},e,{id,maxHp:e.hp,pending:!!e.spawnAt,dir:-1,team:'enemy',
-        defeated:e.chapter<this.chapter,hp:e.chapter<this.chapter?0:e.hp,action:e.chapter<this.chapter?'dead':'idle',aiTimer:.65+(id>2?id-1:id)*.13})));
+        defeated:e.chapter<this.chapter,hp:e.chapter<this.chapter?0:e.hp,action:e.chapter<this.chapter?'dead':'idle',aiTimer:.65+id*.13})));
       this.boss=serpent();this.offering=this.chapter===2;this.comb=this.chapter>0;this.storm=0;
       this.phase='playing';this.time=0;this.realTime=0;this.events=[];this.hitstop=0;this.slowTimer=0;
       this.endAge=0;this.ritualAge=0;this.introAge=0;this.storyStep=-1;this.attackSerial=0;
@@ -552,7 +552,7 @@
       return input;
     }
     interact(){
-      if(this.chapter!==1||this.offering||this.enemy()||Math.abs(this.player.x-3650)>145||this.player.y>1)return false;
+      if(this.chapter!==1||this.offering||this.enemies.some(e=>!e.defeated&&e.chapter===1)||Math.abs(this.player.x-3650)>145||this.player.y>1)return false;
       this.phase='ritual';this.ritualAge=0;this.player.vx=0;this.action(this.player,'ritual');
       this.emit('ritual');this.emit('story',{speaker:'須佐之男命',text:'八つの門に、八つの酒槽。八塩折の酒で、大蛇を誘おう。',duration:5});return true;
     }
@@ -608,7 +608,7 @@
       const controls=this.demo?this.autoPlayer():input;
       if(controls.interact&&this.interact())return;
       this.controls(p,controls,dt);
-      // Both guards emerge on the same frame, on safe ground beyond the forest pit.
+      // Both sake guards emerge on the same frame, beyond the shrine flame trap.
       for(const e of this.enemies){
         if(e.pending&&!e.defeated&&e.chapter===this.chapter&&p.x>=e.spawnAt&&Math.abs(p.y)<1){
           e.pending=false;e.active=true;e.x=p.x+e.spawnSide*200;e.safeX=e.x;e.dir=-e.spawnSide;e.aiTimer=.8;

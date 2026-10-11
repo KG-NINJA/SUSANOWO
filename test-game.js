@@ -206,16 +206,19 @@ function duel(){const g=new Saga();g.player.x=680;g.enemies[0].x=872;for(const e
 }
 console.log('PASS: acceleration/braking/reversal, rendered foot contacts at 30/60/120 Hz, jump anticipation/landing absorption, sword combat, parry, pits and traps, paused animation, one crow, all terrain crossed, eight heads, offering, deterministic complete story and finite anatomy.');
 
-// The second forest encounter emerges simultaneously on both sides, once only.
+// Restore the forest duel; both sake guards appear simultaneously and block the ritual.
 {
- const g=new Saga(),pair=g.enemies.filter(e=>e.spawnAt===1500);
- assert.equal(pair.length,2);g.enemies[0].defeated=true;g.enemies[0].hp=0;
- g.player.x=1499;tick(g,1);assert(pair.every(e=>e.pending&&!e.active));assert.equal(g.enemy(),null);
- g.player.x=1500;g.drainEvents();tick(g,1);
- assert(pair.every(e=>!e.pending&&e.active&&e.hp===70));
+ const forest=new Saga();const guards=forest.enemies.filter(e=>e.name==='樹骸の守り手');
+ assert.equal(guards.length,1);assert.equal(guards[0].hp,140);assert(!guards[0].pending);
+ const g=new Saga({checkpoint:1}),pair=g.enemies.filter(e=>e.spawnAt===3400);
+ assert.equal(pair.length,2);const first=g.enemies.find(e=>e.chapter===1&&!e.spawnAt);first.defeated=true;first.hp=0;
+ g.player.x=3399;tick(g,1);assert(pair.every(e=>e.pending&&!e.active));assert.equal(g.enemy(),null);
+ g.player.x=3650;assert.equal(g.interact(),false);g.player.x=3400;g.drainEvents();tick(g,1);
+ assert(pair.every(e=>!e.pending&&e.active));assert.equal(pair[0].hp+pair[1].hp,165);
  assert(pair[0].x<g.player.x&&pair[1].x>g.player.x);assert.equal(pair[0].dir,1);assert.equal(pair[1].dir,-1);
  const events=g.drainEvents().filter(e=>e.type==='encounter');assert.equal(events.length,2);assert.equal(events[0].time,events[1].time);
  assert(pair.every(e=>!g.pitAt(e.x)));tick(g,1);assert.equal(g.drainEvents().filter(e=>e.type==='encounter').length,0);
- pair[0].defeated=true;pair[0].hp=0;assert.equal(g.enemy(),pair[1]);
- const checkpoint=new Saga({checkpoint:1});assert(checkpoint.enemies.filter(e=>e.spawnAt).every(e=>e.defeated));
+ pair[0].defeated=true;pair[0].hp=0;g.player.x=3650;assert.equal(g.interact(),false);
+ pair[1].defeated=true;pair[1].hp=0;assert.equal(g.interact(),true);
+ const checkpoint=new Saga({checkpoint:2});assert(checkpoint.enemies.filter(e=>e.spawnAt).every(e=>e.defeated));
 }
