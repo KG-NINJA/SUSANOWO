@@ -67,7 +67,7 @@ function updateHUD(){
   for(const h of game.boss.heads){const d=$('head'+h.id);d.querySelector('i').style.width=h.hp/h.maxHp*100+'%';d.classList.toggle('cut',h.hp<=0);d.classList.toggle('active',['warn','strike','open'].includes(h.phase));}
   $('hintText').textContent=game.demo?'自動演武 — 須佐之男命が刃を振るい、誓いを果たします。':game.prompt;
   $('scoreText').textContent=String(game.score).padStart(5,'0');$('comboText').textContent=game.chain>1&&game.chainAge>0?game.chain+' 連斬':'';
-  const canOffer=game.chapter===1&&!game.offering&&!game.enemy()&&Math.abs(p.x-3650)<150&&game.phase==='playing';
+  const canOffer=game.chapter===1&&!game.offering&&!game.enemies.some(e=>!e.defeated&&e.chapter===1)&&Math.abs(p.x-3650)<=145&&p.y<=1&&game.phase==='playing';
   $('interactPrompt').classList.toggle('hidden',!canOffer);$('ritualMeter').classList.toggle('hidden',game.phase!=='ritual');
   $('ritualFill').style.width=game.ritualAge/3.6*100+'%';
   $('stage').classList.toggle('boss-active',game.boss.active&&game.phase!=='ending'&&game.phase!=='won');
