@@ -222,3 +222,30 @@ console.log('PASS: acceleration/braking/reversal, rendered foot contacts at 30/6
  pair[1].defeated=true;pair[1].hp=0;assert.equal(g.interact(),true);
  const checkpoint=new Saga({checkpoint:2});assert(checkpoint.enemies.filter(e=>e.spawnAt).every(e=>e.defeated));
 }
+
+// Moving keystones are real one-way platforms: carry, jump, walk-off and fall recovery.
+{
+ const {KEYSTONES,keystonePose}=require('./engine.js');
+ for(const hz of [30,60,120]){
+  const g=new Saga({checkpoint:2}),p=g.player,stone=KEYSTONES[0];g.time=1;
+  const pose=keystonePose(stone,g.time);p.x=pose.x;p.y=pose.y;p.vy=0;p.platform=stone.id;p.platformTime=g.time;
+  for(let n=0;n<hz*2;n++)g.tick(1/hz,{});
+  const now=keystonePose(stone,g.time);assert.equal(p.platform,stone.id);assert(Math.abs(p.x-now.x)<1e-6);assert(Math.abs(p.y-now.y)<1e-6);
+  assert(g.request(p,'jump'));assert.equal(p.platform,null);assert.equal(g.request(p,'jump'),false);
+ }
+ const g=new Saga({checkpoint:2}),p=g.player,stone=KEYSTONES[0];g.time=1;
+ const pose=keystonePose(stone,g.time);p.x=pose.x;p.y=pose.y-8;p.vy=100;
+ g.tick(1/60,{});assert.equal(p.platform,null,'cannot land through underside');
+ const h=new Saga({checkpoint:2}),q=h.player;q.x=4400;q.y=-20;q.safeX=4030;
+ for(let n=0;n<150&&!h.pitScene;n++)h.tick(1/60,{});
+ assert(h.pitScene);tick(h,90);assert.equal(q.x,4032);assert.equal(q.y,0);assert.equal(q.hp,132);assert.equal(q.platform,null);
+ for(const hz of [30,60,120])for(const phase of [0,2,6,10]){
+  const run=new Saga({demo:true,checkpoint:2});run.time=phase;const landed=new Set();
+  for(let n=0;n<hz*30&&!run.boss.active;n++){run.tick(1/hz);for(const event of run.drainEvents())if(event.keystone)landed.add(event.keystone);}
+  assert(run.boss.active,`crossing stalled at ${hz} Hz / ${phase}`);assert.equal(run.falls,0);assert.equal(landed.size,4);assert.equal(run.player.y,0,'boss intro waits for landing');
+ }
+ const walk=new Saga({checkpoint:2}),w=walk.player,sp=keystonePose(stone,0);w.x=sp.x;w.y=sp.y;w.platform=stone.id;
+ for(let n=0;n<40&&w.platform;n++)walk.tick(1/60,{left:true});assert.equal(w.platform,null,'walking beyond the edge must release support');
+ const pause=new Saga({checkpoint:2}),before=JSON.stringify(pause.snapshot());pause.tick(0,{});assert.equal(JSON.stringify(pause.snapshot()),before);
+}
+console.log('PASS: moving keystone carrying, one-way collisions, no air jump, fall return and four-stone crossings at 30/60/120 Hz across motion phases.');

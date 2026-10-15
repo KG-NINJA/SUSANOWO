@@ -62,6 +62,7 @@ class YakumoAudio{
     if(e.type==='block'){this.fm(92,t,.18,.4,2.73,4.4,this.effects);this.noise(t,.1,.23,3200);}
     if(e.type==='parry'){this.fm(91,t,.25,1.0,2.71,5,this.effects);this.fm(98,t+.03,.12,.85,2.1,4,this.effects);this.noise(t,.1,.26,3600);}
     if(e.type==='step')this.noise(t,.09,.05,330);
+    if(e.type==='land'&&e.keystone){this.fm(83,t,.09,.65,2.03,1.8,this.effects);this.fm(90,t+.04,.06,.8,1.5,1.1,this.effects);}
     if(e.type==='land'){this.noise(t,.15,.16,410);if(e.impact>450)this.taiko(t,.16,72);}
     if(e.type==='dodge'||e.type==='jump')this.noise(t,.16,.1,1100);
     if(e.type==='lightning'){this.taiko(t,.7,67);this.noise(t,.65,.48,450);this.fm(43,t,.22,1.3,1.3,6,this.effects);}
