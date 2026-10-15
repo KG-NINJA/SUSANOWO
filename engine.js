@@ -27,13 +27,21 @@
   const PITS=[
     {id:'forest-gap',x:1130,width:140,chapter:0},
     {id:'shrine-gap',x:2110,width:138,chapter:1},
-    {id:'serpent-gap',x:4170,width:152,chapter:2}
+    {id:'serpent-gap',x:4080,width:690,chapter:2,keystones:true}
   ];
   const TRAPS=[
     {id:'bamboo-teeth',type:'spikes',x:495,width:86,height:64,chapter:0,period:3.1,warning:1.1,duration:.85,offset:.35},
     {id:'cursed-flame',type:'flame',x:2920,width:82,height:88,chapter:1,period:3.4,warning:1,duration:.95,offset:.4},
-    {id:'serpent-teeth',type:'spikes',x:4480,width:94,height:72,chapter:2,period:3.0,warning:.9,duration:.9,offset:1.1}
+    {id:'serpent-teeth',type:'spikes',x:4780,width:94,height:72,chapter:2,period:3.0,warning:.9,duration:.9,offset:1.1}
   ];
+  const KEYSTONES=[
+    {id:'keystone-1',x:4200,y:60,width:112,phase:0},
+    {id:'keystone-2',x:4360,y:95,width:112,phase:1.4},
+    {id:'keystone-3',x:4520,y:85,width:112,phase:2.8},
+    {id:'keystone-4',x:4680,y:50,width:112,phase:4.2}
+  ];
+  function keystonePose(stone,time){return {x:stone.x+16*Math.sin(time*.95+stone.phase),
+    y:stone.y+20*Math.sin(time*1.7+stone.phase),width:stone.width};}
   function trapState(trap,time){
     const elapsed=time+trap.offset,age=((elapsed%trap.period)+trap.period)%trap.period,cycle=Math.floor(elapsed/trap.period);
     if(age<trap.warning)return {phase:'warning',progress:age/trap.warning,cycle};
@@ -46,7 +54,7 @@
       walk:0,combo:0,comboTimer:0,buffer:null,bufferTime:0,hitUsed:false,guardAge:99,guarding:false,
       invincible:0,aiTimer:.4,aiChoice:0,active:false,defeated:false,deadAge:0,footPhase:0,
       attacks:0,flashes:0,wound:0,scorch:0,burnTimer:0,accel:0,turnAge:1,turnFrom:1,landingAge:1,landingSpeed:0,
-      safeX:options.x||265,color:'hero',team:'player'},options);
+      platform:null,platformTime:0,safeX:options.x||265,color:'hero',team:'player'},options);
   }
   function serpent(){
     return {x:5600,active:false,phase:'dormant',t:0,index:0,cycles:0,cooldown:1.3,telegraph:null,defeated:false,
@@ -69,7 +77,7 @@
       this.traps=TRAPS.map(t=>Object.assign({},t,{cleared:t.chapter<this.chapter,lastHitCycle:-1,lastPhase:'hidden'}));
       this.crow={x:1790,y:294,hp:this.chapter>0?0:82,maxHp:82,active:false,defeated:this.chapter>0,
         phase:this.chapter>0?'gone':'perch',t:0,dir:-1,flashes:0,hitSerial:-1,attackUsed:false,cycles:0};
-      this.falls=0;this.pitScene=null;
+      this.falls=0;this.pitScene=null;this.keystones=KEYSTONES.map(s=>({...s}));this.stoneLandings=0;this.keystoneCue=false;
       this.prompt='天羽々斬を抜き、出雲の闇を祓え。';this.storyCue=-1;this.distance=this.player.x;
       this.emit('chapter',{chapter:this.chapter});
       if(this.chapter===0)this.emit('story',{speaker:'出雲の地',text:'高天原を去った須佐之男命。哭き声のする森で、櫛名田比売と出会う。',duration:7});
@@ -85,40 +93,41 @@
     enemy(){return this.enemies.filter(e=>!e.defeated&&!e.pending&&e.chapter===this.chapter).sort((a,b)=>Math.abs(a.x-this.player.x)-Math.abs(b.x-this.player.x))[0]||null;}
     targetHead(){return this.boss.heads.find(h=>['warn','strike','open'].includes(h.phase))||null;}
     pitAt(x){return this.pits.find(p=>x>p.x&&x<p.x+p.width)||null;}
+    grounded(f){return !!f.platform||(Math.abs(f.y)<1&&!this.pitAt(f.x));}
     request(f,name){
       if(f.hp<=0||f.defeated)return false;
       if(!this.free(f)){
         const m=MOVES[f.action];if(m&&f.t>m.duration*.27){f.buffer=name;f.bufferTime=.36;}return false;
       }
       if(name==='jump'){
-        if(Math.abs(f.y)>1||this.pitAt(f.x)||f.stamina<10)return false;f.vy=640;f.stamina-=10;this.action(f,'jump');
+        if(!this.grounded(f)||f.stamina<10)return false;f.platform=null;f.vy=640;f.stamina-=10;this.action(f,'jump');
         this.emit('jump',{x:f.x,team:f.team});return true;
       }
       if(name==='dodge'){
-        if(Math.abs(f.y)>1||this.pitAt(f.x)||f.stamina<22)return false;f.stamina-=22;f.invincible=.34;f.vx=f.dir*570;
+        if(!this.grounded(f)||f.stamina<22)return false;f.stamina-=22;f.invincible=.34;f.vx=f.dir*570;
         this.action(f,'dodge');this.emit('dodge',{x:f.x,dir:f.dir,team:f.team});return true;
       }
       if(name==='storm'){
         if(f.team!=='player'||this.storm<100)return false;
       }
       if(name==='slash'){
-        if(f.y>22)name='airslash';
+        if(f.y>22&&!f.platform)name='airslash';
         else{const next=f.comboTimer>0?f.combo%3:0;name=['slash','reverse','cleave'][next];f.combo=next+1;f.comboTimer=1.25;}
       }
-      if(name==='iai'&&f.y>22)name='airslash';
+      if(name==='iai'&&f.y>22&&!f.platform)name='airslash';
       const m=MOVES[name];if(!m||f.stamina<m.cost)return false;
       if(name==='storm')this.storm=0;
       f.stamina-=m.cost;f.hitUsed=false;f.effectUsed=false;f.attacks++;f.serial=++this.attackSerial;f.guarding=false;if(f.y<=1)f.vx=0;
       this.action(f,name);this.emit('swing',{x:f.x,dir:f.dir,move:name,team:f.team});return true;
     }
     controls(f,input,dt){
-      if(input.guard&&this.free(f)&&f.y<1){if(!f.guarding)f.guardAge=0;f.guarding=true;this.action(f,'guard');}
+      if(input.guard&&this.free(f)&&this.grounded(f)){if(!f.guarding)f.guardAge=0;f.guarding=true;this.action(f,'guard');}
       else f.guarding=false;
       if(input.jump)this.request(f,'jump');if(input.dodge)this.request(f,'dodge');
       if(input.slash)this.request(f,'slash');if(input.iai)this.request(f,'iai');if(input.storm)this.request(f,'storm');
       if(this.free(f)){
         const move=(input.right?1:0)-(input.left?1:0),speed=f.guarding?72:input.down?94:248;
-        const previous=f.vx,desired=move*speed,airborne=f.y>1||f.vy>0;
+        const previous=f.vx,desired=move*speed,airborne=!this.grounded(f)||f.vy>0;
         if(airborne)f.vx+=(desired-f.vx)*Math.min(1,dt*17);
         else{
           const reversing=move&&f.vx*move<0,rate=reversing?1940:move?1180:1760;
@@ -129,7 +138,7 @@
           // Exchange the legs without changing either foot's world contact point.
           this.face(f,move);
         }
-        if(f.y>1)this.action(f,'jump');else if(f.guarding)this.action(f,'guard');
+        if(!this.grounded(f))this.action(f,'jump');else if(f.guarding)this.action(f,'guard');
         else if(input.down)this.action(f,'crouch');else this.action(f,Math.abs(f.vx)>12?'walk':'idle');
       }
     }
@@ -147,16 +156,37 @@
       if(f.defeated){f.deadAge+=dt;f.vx*=Math.exp(-dt*8);}
       else if(MOVES[f.action]&&f.y<=1||['hit','stunned','trapHit','burned','recover'].includes(f.action))f.vx*=Math.exp(-dt*10);
       if(!f.defeated)f.stamina=Math.min(100,f.stamina+dt*(MOVES[f.action]?5:f.action==='guard'?18:28));
-      const previousX=f.x,previousPit=this.pitAt(f.x);
+      // Carry a grounded rider by the same analytic movement that is rendered.
+      if(f.platform){
+        const stone=this.keystones.find(s=>s.id===f.platform);
+        if(stone&&f.vy<=0&&!f.defeated){
+          const before=keystonePose(stone,f.platformTime),now=keystonePose(stone,this.time);
+          f.x+=now.x-before.x;f.y=now.y;f.platformX=now.x;f.platformTime=this.time;
+        }else f.platform=null;
+      }
+      const previousX=f.x,previousY=f.y,previousPit=this.pitAt(f.x);
       f.x+=f.vx*dt;f.walk+=f.vx*f.dir*dt/GAIT.cycle*Math.PI*2;
-      if(Math.abs(f.vx)>65&&f.y<1&&f.action==='walk'){
+      if(Math.abs(f.vx)>65&&this.grounded(f)&&f.action==='walk'){
         const foot=Math.floor(f.walk/Math.PI);if(foot!==f.footPhase){f.footPhase=foot;this.emit('step',{x:f.x,team:f.team});}
       }
       let pit=this.pitAt(f.x);
       if(f.y< -5&&!pit&&previousPit){f.x=previousX;f.vx=0;pit=previousPit;}
-      if(f.y>0||f.vy>0||pit||f.y<0){
+      if(f.platform){const stone=this.keystones.find(s=>s.id===f.platform),pose=keystonePose(stone,this.time);
+        if(Math.abs(f.x-pose.x)>pose.width/2)f.platform=null;
+      }
+      if(!f.platform&&(f.y>0||f.vy>0||pit||f.y<0)){
         f.vy-=1550*dt;f.y+=f.vy*dt;
-        if(!pit&&f.y<=0){f.landingSpeed=Math.max(0,-f.vy);f.landingAge=0;f.y=0;f.vy=0;
+        // One-way swept landing: crossing from above, never through a stone's underside.
+        if(pit?.keystones&&f.team==='player'&&!f.defeated){
+          for(const stone of this.keystones){const before=keystonePose(stone,this.time-dt),now=keystonePose(stone,this.time);
+            if(previousY>=before.y-.01&&f.y<=now.y&&f.vy<(now.y-before.y)/dt&&Math.abs(f.x-now.x)<=now.width/2){
+              f.platform=stone.id;f.platformX=now.x;f.platformTime=this.time;f.y=now.y;f.landingSpeed=Math.max(0,-f.vy);f.vy=0;f.landingAge=0;
+              if(this.free(f)||f.action==='fall')this.action(f,Math.abs(f.vx)>12?'walk':'idle');
+              this.stoneLandings++;this.emit('land',{x:f.x,y:f.y,team:f.team,impact:f.landingSpeed,keystone:stone.id});break;
+            }
+          }
+        }
+        if(!f.platform&&!pit&&f.y<=0){f.landingSpeed=Math.max(0,-f.vy);f.landingAge=0;f.y=0;f.vy=0;
           if(this.free(f))this.action(f,Math.abs(f.vx)>12?'walk':'idle');
           this.emit('land',{x:f.x,team:f.team,impact:f.landingSpeed});}
       }
@@ -165,7 +195,7 @@
         if(f.team==='player'){
           this.falls++;const safe=f.safeX<pit.x+pit.width/2?pit.x-48:pit.x+pit.width+48;
           this.damagePlayer(28,{x:f.x,guardable:false,pit:true,hazard:'pit'});
-          f.x=clamp(f.x,pit.x+pit.width*.42,pit.x+pit.width*.58);f.y=-235;f.vy=0;f.vx=0;
+          f.platform=null;f.x=clamp(f.x,pit.x+pit.width*.42,pit.x+pit.width*.58);f.y=-235;f.vy=0;f.vx=0;
           f.buffer=null;f.bufferTime=0;this.action(f,'crumple');
           this.pitScene={age:0,duration:f.defeated?2.1:1.12,returnAt:.88,safeX:safe,pitId:pit.id,fatal:f.defeated,recovered:false};
           this.emit('pitFall',{x:f.x,y:f.y+43,dir:f.dir,groundY:f.y,team:'player',fatal:f.defeated});
@@ -233,7 +263,7 @@
       for(const pit of this.pits){
         if(pit.chapter!==this.chapter)continue;
         if(!pit.cleared&&p.x>pit.x+pit.width+15){pit.cleared=true;this.score+=120;this.emit('obstacleClear',{x:pit.x+pit.width,kind:'pit'});}
-        if(p.x>pit.x-190&&p.x<pit.x+pit.width&&p.y>=0)this.prompt='落とし穴 — 手前で Space / ↑。空中でも左右へ。';
+        if(p.x>pit.x-190&&p.x<pit.x+pit.width&&p.y>=0)this.prompt=pit.keystones?'跳ねる要石へ Space / ↑。石の上で待ち、次の足場へ。':'落とし穴 — 手前で Space / ↑。空中でも左右へ。';
       }
       for(const trap of this.traps){
         if(trap.chapter!==this.chapter)continue;
@@ -289,7 +319,24 @@
       const m=MOVES[p.action],dx=c.x-p.x;
       if(m&&!p.hitUsed&&p.t>=m.active[0]&&p.t<=m.active[1]&&dx*p.dir>0&&Math.abs(dx)<m.range&&Math.abs(c.y-(p.y+130))<105)this.hitCrow(p.action);
     }
+    autoKeystones(){
+      const p=this.player,pit=this.pits.find(p=>p.keystones);
+      if(this.chapter!==2||p.x<pit.x-150||p.x>pit.x+pit.width+20)return null;
+      const stones=this.keystones.map(s=>({...keystonePose(s,this.time),id:s.id}));
+      if(this.grounded(p))this.stoneTarget=p.platform?stones[stones.findIndex(s=>s.id===p.platform)+1]?.id||'bank':stones.find(s=>s.x>p.x+20)?.id||'bank';
+      const next=stones.find(s=>s.id===this.stoneTarget);
+      const goal=next?next.x:pit.x+pit.width+45;
+      const input={};const dx=goal-p.x;
+      if(Math.abs(dx)>5)input[dx>0?'right':'left']=true;
+      if(this.grounded(p)&&this.free(p)&&p.stamina>=10){
+        if(p.platform||p.x>pit.x-45)input.jump=true;
+      }
+      // Brake above the intended landing rather than running off the moving stone.
+      if(!this.grounded(p)&&next&&Math.abs(dx)<24){delete input.right;delete input.left;}
+      return input;
+    }
     athleticInput(){
+      const crossing=this.autoKeystones();if(crossing)return crossing;
       const p=this.player;if(p.y< -1)return {};
       const obstacle=[...this.pits,...this.traps].filter(a=>a.chapter===this.chapter&&p.x>a.x-100&&p.x<a.x+a.width+30).sort((a,b)=>a.x-b.x)[0];
       if(!obstacle)return null;
@@ -522,16 +569,17 @@
         }
       }
       if(this.chapter===0&&p.x>490&&this.storyCue<0){this.storyCue=0;this.emit('story',{speaker:'櫛名田比売',text:'八岐大蛇は、毎年ひとりを喰らう。最後に残ったのが、私です。',duration:6});}
-      if(this.chapter===2&&p.x>=4880&&!this.boss.active){this.hazards=[];this.beginBoss();}
+      if(this.chapter===2&&!this.keystoneCue&&p.x>3900){this.keystoneCue=true;this.emit('story',{speaker:'天の要石',text:'断崖に浮く四つの要石。揺れを見定め、一つずつ飛び移れ。',duration:5});}
+      if(this.chapter===2&&p.x>=4880&&p.y===0&&!this.boss.active){this.hazards=[];this.beginBoss();}
       this.distance=Math.max(this.distance,p.x);
     }
     snapshot(){return {phase:this.phase,chapter:this.chapter,time:this.time,score:this.score,hits:this.hits,parries:this.parries,
-      storm:this.storm,offering:this.offering,comb:this.comb,falls:this.falls,player:{x:this.player.x,y:this.player.y,hp:this.player.hp,stamina:this.player.stamina,action:this.player.action},
+      stoneLandings:this.stoneLandings,platform:this.player.platform,storm:this.storm,offering:this.offering,comb:this.comb,falls:this.falls,player:{x:this.player.x,y:this.player.y,hp:this.player.hp,stamina:this.player.stamina,action:this.player.action},
       crow:{hp:this.crow.hp,defeated:this.crow.defeated,active:this.crow.active,phase:this.crow.phase,cycles:this.crow.cycles},
       terrain:{pits:this.pits.map(a=>({id:a.id,cleared:a.cleared})),traps:this.traps.map(a=>({id:a.id,type:a.type,cleared:a.cleared}))},
       enemies:this.enemies.map(e=>({hp:e.hp,defeated:e.defeated,x:e.x})),boss:{active:this.boss.active,phase:this.boss.phase,enraged:this.boss.enraged,
         heads:this.boss.heads.map(h=>({id:h.id,hp:h.hp,phase:h.phase,x:h.x,y:h.y}))}};}
   }
-  const API={Saga,MOVES,CHAPTERS,ENEMIES,HEAD_NAMES,GAIT,PITS,TRAPS,trapState,clamp};root.YakumoEngine=API;
+  const API={Saga,MOVES,CHAPTERS,ENEMIES,HEAD_NAMES,GAIT,PITS,TRAPS,KEYSTONES,keystonePose,trapState,clamp};root.YakumoEngine=API;
   if(typeof module!=='undefined'&&module.exports)module.exports=API;
 })(typeof globalThis!=='undefined'?globalThis:this);

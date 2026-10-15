@@ -107,7 +107,7 @@
     if(f.action==='fall')return pose({hipY:-84,lean:-.17,fx:18,fy:-147,bx:4,by:-131,blade:-1.2,ffx:27,ffy:-21,bfx:-20,bfy:-34,robe:18});
     if(!v){const b=Math.sin(time*2.35+(f.id||0)*1.1),brake=clamp(-(f.accel||0)*f.dir/1760,0,1);
       v=pose({hipY:-88+b*.8+brake*4,lean:.065-brake*.09,head:brake*.05,fx:39+b,fy:-117-b+brake*3,bx:27+b,by:-107-b+brake*3,blade:-.72+b*.015});}
-    if(Math.abs(f.y||0)<1){
+    if(f.platform||Math.abs(f.y||0)<1){
       if(f.action!=='walk'&&Math.abs(f.vx||0)>12){const front=gait(f.walk),back=gait(f.walk+Math.PI);
         Object.assign(v,{ffx:front.x,ffy:front.y,bfx:back.x,bfy:back.y,toe:front.toe,backToe:back.toe});}
       const turn=Math.sin(Math.PI*clamp((f.turnAge===undefined?1:f.turnAge)/.18,0,1));
@@ -143,7 +143,7 @@
   class Animator{
     constructor(){
       this.pose=pose({});this.belt=0;this.previousBelt=0;this.trail=[];this.skeleton=skeleton(this.pose);
-      this.contacts=[null,null];this.swingOffsets=[null,null];this.rest=null;this.wasMoving=false;this.lastDir=null;this.lastX=null;
+      this.contacts=[null,null];this.swingOffsets=[null,null];this.rest=null;this.wasMoving=false;this.lastDir=null;this.lastX=null;this.lastPlatform=null;this.lastPlatformX=0;
     }
     feet(f,v,dt){
       const names=[['ffx','ffy','toe'],['bfx','bfy','backToe']],scale=GAIT.scale,dir=f.dir;
@@ -152,7 +152,12 @@
         this.pose.ffx=-old.bfx;this.pose.ffy=old.bfy;this.pose.bfx=-old.ffx;this.pose.bfy=old.ffy;
         this.contacts.reverse();this.swingOffsets.reverse();this.rest=null;
       }
-      const ground=Math.abs(f.y||0)<.5&&(f.vy||0)<=0,free=['idle','walk','guard','crouch'].includes(f.action);
+      if(f.platform&&f.platform===this.lastPlatform&&Number.isFinite(f.platformX)){
+        const carry=f.platformX-this.lastPlatformX;
+        this.contacts=this.contacts.map(x=>x===null?null:x+carry);
+        if(this.rest){for(const origin of this.rest.origins)origin.x+=carry;this.rest.targets=this.rest.targets.map(x=>x+carry);}
+      }
+      const ground=(!!f.platform||Math.abs(f.y||0)<.5)&&(f.vy||0)<=0,free=['idle','walk','guard','crouch'].includes(f.action);
       if(!ground||!free||this.lastX!==null&&Math.abs(f.x-this.lastX)>80){
         this.contacts=[null,null];this.swingOffsets=[null,null];this.rest=null;this.wasMoving=false;
       }else if(Math.abs(f.vx||0)>12){
@@ -191,17 +196,17 @@
         }
         this.wasMoving=false;
       }
-      this.lastDir=dir;this.lastX=f.x;
+      this.lastDir=dir;this.lastX=f.x;this.lastPlatform=f.platform;this.lastPlatformX=f.platformX||0;
     }
     update(f,dt,time){
       if(dt<=0)return this.skeleton;
       const v=target(f,time),rate=['slash','reverse','cleave','iai','airslash','storm'].includes(f.action)?37:19,mix=1-Math.exp(-dt*rate);
-      if(Math.abs(f.y||0)<.5&&Math.abs(f.vx||0)<=12&&['idle','walk','guard','crouch'].includes(f.action))
+      if((!!f.platform||Math.abs(f.y||0)<.5)&&Math.abs(f.vx||0)<=12&&['idle','walk','guard','crouch'].includes(f.action))
         v.hipX+=clamp((this.pose.ffx+this.pose.bfx)*.325,-21,21);
       // The analytical stride is already smooth. Ground contacts must bypass pose filtering.
       const feet=this.pose;const previous={ffx:feet.ffx,ffy:feet.ffy,bfx:feet.bfx,bfy:feet.bfy};
       for(const k of Object.keys(base))this.pose[k]+=(v[k]-this.pose[k])*mix;
-      if(Math.abs(f.y||0)<.5&&['idle','walk','guard','crouch'].includes(f.action))Object.assign(this.pose,previous);
+      if((!!f.platform||Math.abs(f.y||0)<.5)&&['idle','walk','guard','crouch'].includes(f.action))Object.assign(this.pose,previous);
       this.feet(f,v,dt);
       const desired=-f.vx*.040+Math.sin(time*4.6)*2+this.pose.robe;
       const speed=(this.belt-this.previousBelt)*.85;this.previousBelt=this.belt;this.belt+=speed+(desired-this.belt)*Math.min(.12,dt*5);this.belt=Math.max(-30,Math.min(30,this.belt));

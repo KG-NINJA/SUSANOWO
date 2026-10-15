@@ -154,6 +154,28 @@
       c.globalAlpha=1;
       for(let i=0;i<18;i++){const x=(i*137-this.camera*.4)%1600,y=G+17+i%5*21;line(c,x,y,x+29+i%4*23,y,1,'#b2c1b225');}
     }
+    keystones(c,game){
+      if(game.chapter!==2)return;
+      const pit=game.pits.find(p=>p.keystones),left=pit.x-this.camera;
+      if(left>W||left+pit.width<0)return;
+      c.save();c.beginPath();c.rect(left+16,G+30,pit.width-32,H-G+180);c.clip();
+      for(let i=0;i<6;i++){const y=G+50+i*37,x=left+pit.width/2+Math.sin(game.time*.3+i)*55;
+        const mist=c.createRadialGradient(x,y,1,x,y,pit.width*.6);mist.addColorStop(0,'#8ba5b21b');mist.addColorStop(1,'#7194aa00');c.fillStyle=mist;c.fillRect(left,y-35,pit.width,80);}
+      c.restore();
+      c.textAlign='center';c.font='16px "Noto Serif CJK JP",serif';c.fillStyle='#d6d5b8';c.fillText('天を巡る要石',left+pit.width/2,G-220);
+      c.font='11px sans-serif';c.fillStyle='#98b5b9';c.fillText('揺れを見て、一つずつ飛び移れ',left+pit.width/2,G-197);
+      for(const stone of game.keystones){const pose=YakumoEngine.keystonePose(stone,game.time),x=pose.x-this.camera,y=G-pose.y,w=pose.width;
+        const riding=game.player.platform===stone.id;
+        for(let i=4;i>0;i--){const past=YakumoEngine.keystonePose(stone,game.time-i*.07);c.globalAlpha=.035*(5-i);ellipse(c,past.x-this.camera,G-past.y+20,w*.35,9,'#8dc4c5');}c.globalAlpha=1;
+        const glow=c.createRadialGradient(x,y+4,3,x,y+4,75);glow.addColorStop(0,riding?'#b6e6d355':'#81bab92e');glow.addColorStop(1,'#7eb3ae00');c.fillStyle=glow;c.fillRect(x-80,y-75,160,150);
+        polygon(c,[[x-w/2,y+2],[x-w*.35,y+22],[x-w*.12,y+43],[x+w*.17,y+35],[x+w*.42,y+19],[x+w/2,y+2]],'#34484e','#768b85');
+        polygon(c,[[x-w/2,y],[x-w*.37,y-9],[x+w*.3,y-9],[x+w/2,y],[x+w*.28,y+8],[x-w*.3,y+8]],'#8c9b8b','#c3c6a5');
+        line(c,x-w*.29,y+8,x+w*.29,y+8,3,'#b0a47e');
+        for(const dx of [-22,18]){line(c,x+dx,y+9,x+dx-2,y+27,2,'#d5c9a3');polygon(c,[[x+dx-4,y+13],[x+dx+5,y+16],[x+dx-4,y+20],[x+dx+2,y+25]],'#eee3bd');}
+        c.fillStyle=riding?'#eff8d7':'#a5ddce';c.font='13px serif';c.fillText('要',x,y+1);
+        for(let i=0;i<4;i++){const t=game.time*1.3+i*1.57;c.globalAlpha=.35;ellipse(c,x+Math.sin(t)*40,y+35+Math.cos(t*1.3)*13,1.6,1.6,'#b9e0d3');}c.globalAlpha=1;
+      }
+    }
     terrain(c,game){
       if(game.attract)return;
       for(const pit of game.pits){
@@ -169,8 +191,9 @@
         for(let i=0;i<5;i++){line(c,x+8+i%2*3,G+16+i*16,x+13+i%3*4,G+30+i*16,2,'#35515a');line(c,x+w-8-i%2*3,G+16+i*16,x+w-13-i%3*4,G+30+i*16,2,'#35515a');}
         c.save();c.globalAlpha=.12;ellipse(c,x+w/2,G+85,w*.36,10,'#7b9daa');c.restore();
         for(const px of [x-23,x+w+23]){line(c,px,G,px,G-31,5,'#927963');line(c,px-8,G-27,px+8,G-27,2,'#c6b291');polygon(c,[[px-6,G-25],[px+7,G-25],[px+2,G-14]],'#c1baa0');}
-        c.textAlign='center';c.font='12px "Noto Serif CJK JP",serif';c.fillStyle='#cfbea1';c.fillText('断崖 · 跳躍',x+w/2,G-30);
+        c.textAlign='center';c.font='12px "Noto Serif CJK JP",serif';c.fillStyle='#cfbea1';c.fillText(pit.keystones?'断崖絶壁 · 要石を渡れ':'断崖 · 跳躍',x+w/2,G-30);
       }
+      this.keystones(c,game);
       for(const trap of game.traps){
         const x=trap.x-this.camera,w=trap.width;if(x>W+100||x+w< -100)continue;
         const state=YakumoEngine.trapState(trap,game.time),warm=state.phase==='warning',active=state.phase==='active';

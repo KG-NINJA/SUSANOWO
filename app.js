@@ -102,6 +102,7 @@ document.querySelectorAll('[data-input]').forEach(b=>{
   b.addEventListener('pointerdown',e=>{e.preventDefault();if(mode!=='playing'||paused||game.demo)return;b.setPointerCapture(e.pointerId);touchPointers.set(e.pointerId,b.dataset.input);b.classList.add('pressed');if(oneShot.includes(b.dataset.input))pressed[b.dataset.input]=true;});
   const release=e=>{touchPointers.delete(e.pointerId);b.classList.remove('pressed');};b.addEventListener('pointerup',release);b.addEventListener('pointercancel',release);b.addEventListener('lostpointercapture',release);
 });
+$('keystoneButton').addEventListener('click',()=>start(false,2));
 $('playButton').addEventListener('click',()=>start(false));$('demoButton').addEventListener('click',()=>start(true));$('pauseButton').addEventListener('click',()=>pause());$('resumeButton').addEventListener('click',()=>pause(false));
 ['pauseTitleButton','endTitleButton'].forEach(id=>$(id).addEventListener('click',makeTitle));$('retryButton').addEventListener('click',()=>start(false,game.phase==='won'?0:game.chapter));
 document.querySelector('.brand').addEventListener('click',e=>{e.preventDefault();if(mode==='playing'&&!paused)pause(true);else makeTitle();});
