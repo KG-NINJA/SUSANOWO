@@ -27,7 +27,7 @@
   const PITS=[
     {id:'forest-gap',x:1130,width:140,chapter:0},
     {id:'shrine-gap',x:2110,width:138,chapter:1},
-    {id:'serpent-gap',x:4080,width:690,chapter:2,keystones:true}
+    {id:'serpent-gap',x:4080,width:690,chapter:2,keystones:true,returnX:4922}
   ];
   const TRAPS=[
     {id:'bamboo-teeth',type:'spikes',x:495,width:86,height:64,chapter:0,period:3.1,warning:1.1,duration:.85,offset:.35},
@@ -117,7 +117,7 @@
       if(name==='iai'&&f.y>22&&!f.platform)name='airslash';
       const m=MOVES[name];if(!m||f.stamina<m.cost)return false;
       if(name==='storm')this.storm=0;
-      f.stamina-=m.cost;f.hitUsed=false;f.effectUsed=false;f.attacks++;f.serial=++this.attackSerial;f.guarding=false;if(f.y<=1)f.vx=0;
+      f.stamina-=m.cost;f.hitUsed=false;f.effectUsed=false;f.attacks++;f.serial=++this.attackSerial;f.guarding=false;if(this.grounded(f))f.vx=0;
       this.action(f,name);this.emit('swing',{x:f.x,dir:f.dir,move:name,team:f.team});return true;
     }
     controls(f,input,dt){
@@ -154,7 +154,7 @@
       if(recovery&&f.t>recovery)this.action(f,f.y>1?'jump':'idle');
       if(f.buffer&&this.free(f)){const next=f.buffer;f.buffer=null;this.request(f,next);}
       if(f.defeated){f.deadAge+=dt;f.vx*=Math.exp(-dt*8);}
-      else if(MOVES[f.action]&&f.y<=1||['hit','stunned','trapHit','burned','recover'].includes(f.action))f.vx*=Math.exp(-dt*10);
+      else if(MOVES[f.action]&&this.grounded(f)||['hit','stunned','trapHit','burned','recover'].includes(f.action))f.vx*=Math.exp(-dt*10);
       if(!f.defeated)f.stamina=Math.min(100,f.stamina+dt*(MOVES[f.action]?5:f.action==='guard'?18:28));
       // Carry a grounded rider by the same analytic movement that is rendered.
       if(f.platform){
@@ -193,7 +193,7 @@
       if(pit&&f.y< -5&&!f.defeated){this.action(f,'fall');f.vx=0;}
       if(pit&&f.y< -235&&!f.defeated){
         if(f.team==='player'){
-          this.falls++;const safe=f.safeX<pit.x+pit.width/2?pit.x-48:pit.x+pit.width+48;
+          this.falls++;const safe=f.safeX<pit.x+pit.width/2?pit.x-48:(pit.returnX??pit.x+pit.width+48);
           this.damagePlayer(28,{x:f.x,guardable:false,pit:true,hazard:'pit'});
           f.platform=null;f.x=clamp(f.x,pit.x+pit.width*.42,pit.x+pit.width*.58);f.y=-235;f.vy=0;f.vx=0;
           f.buffer=null;f.bufferTime=0;this.action(f,'crumple');
@@ -542,10 +542,12 @@
         if(n&&!e.hitUsed&&e.t>=n.active[0]&&e.t<=n.active[1]&&(p.x-e.x)*e.dir>0&&Math.abs(e.x-p.x)<n.range&&Math.abs(e.y-p.y)<110){
           e.hitUsed=true;this.damagePlayer(e.action==='iai'?31:e.action==='cleave'?27:19,{x:e.x,fighter:e});}
       }
+      // Constrain movement before terrain damage so retreat cannot touch the bank's spikes.
+      if(this.boss.active)p.x=clamp(p.x,4880,5360);
       this.updateTerrain();
       if(this.phase==='playing')this.updateCrow(dt);
       if(this.boss.active){
-        p.x=clamp(p.x,4710,5360);this.updateBoss(dt);
+        this.updateBoss(dt);
         const m=MOVES[p.action];
         if(m&&!p.hitUsed&&p.t>=m.active[0]&&p.t<=m.active[1]){
           const candidates=this.boss.heads.filter(h=>h.hp>0&&['open','strike'].includes(h.phase)&&(h.x-p.x)*p.dir>0&&Math.abs(h.x-p.x)<m.range&&Math.abs(h.y-(p.y+130))<145);
@@ -583,3 +585,4 @@
   const API={Saga,MOVES,CHAPTERS,ENEMIES,HEAD_NAMES,GAIT,PITS,TRAPS,KEYSTONES,keystonePose,trapState,clamp};root.YakumoEngine=API;
   if(typeof module!=='undefined'&&module.exports)module.exports=API;
 })(typeof globalThis!=='undefined'?globalThis:this);
+
