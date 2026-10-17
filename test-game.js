@@ -249,3 +249,48 @@ console.log('PASS: acceleration/braking/reversal, rendered foot contacts at 30/6
  const pause=new Saga({checkpoint:2}),before=JSON.stringify(pause.snapshot());pause.tick(0,{});assert.equal(JSON.stringify(pause.snapshot()),before);
 }
 console.log('PASS: moving keystone carrying, one-way collisions, no air jump, fall return and four-stone crossings at 30/60/120 Hz across motion phases.');
+
+// Elevated attacks stop and damp movement just like bank attacks, without braking air attacks.
+{
+ const {KEYSTONES,keystonePose}=require('./engine.js');
+ for(const hz of [30,60,120])for(const move of ['slash','iai']){
+  const g=new Saga({checkpoint:2}),p=g.player,stone=KEYSTONES[0],pose=keystonePose(stone,0);
+  Object.assign(p,{x:pose.x,y:pose.y,vx:248,platform:stone.id,platformTime:0});
+  assert(g.request(p,move));assert.equal(p.action,move);assert.equal(p.vx,0,'ground attack stops landing momentum');
+  p.vx=60;g.tick(1/hz);assert(Math.abs(p.vx-60*Math.exp(-10/hz))<1e-8,'supported attack damps residual velocity');
+  for(let n=0;n<Math.floor(MOVES[move].duration*hz);n++)g.tick(1/hz);
+  assert.equal(p.platform,stone.id);assert.equal(g.falls,0);
+ }
+ const ground=new Saga();ground.player.vx=248;ground.request(ground.player,'slash');assert.equal(ground.player.vx,0);
+ const air=new Saga({checkpoint:2}),p=air.player;
+ Object.assign(p,{x:4300,y:240,vy:100,vx:248});
+ assert(air.request(p,'slash'));assert.equal(p.action,'airslash');air.tick(1/60);assert.equal(p.vx,248);
+}
+// Retreating, dodging and jumping against the boss boundary never enter terrain hazards.
+{
+ for(const hz of [30,60,120])for(const input of [{left:true},{left:true,dodge:true},{left:true,jump:true}]){
+  const g=new Saga({checkpoint:2}),p=g.player,pit=g.pits.find(p=>p.keystones);
+  p.x=4880;g.beginBoss();tick(g,200);g.updateBoss=()=>{};
+  for(let n=0;n<hz*4;n++){
+   g.tick(1/hz,input);
+   assert(p.x>=4880);assert.equal(g.pitAt(p.x),null);
+   assert(g.traps.every(t=>p.x<=t.x||p.x>=t.x+t.width));
+  }
+  assert(p.x>pit.x+pit.width);assert.equal(g.falls,0);assert.equal(p.hp,160);
+ }
+}
+// Far-bank recovery must survive a complete spike cycle after invulnerability expires.
+{
+ const g=new Saga({checkpoint:2}),p=g.player,pit=g.pits.find(p=>p.keystones),trap=g.traps.find(t=>t.id==='serpent-teeth');
+ Object.assign(p,{x:4750,y:-240,vy:-100,safeX:pit.x+pit.width+5});
+ tick(g,1);assert(g.pitScene);assert.equal(p.hp,132);
+ const safe=g.pitScene.safeX;assert(safe>pit.x+pit.width);
+ assert(safe<=trap.x||safe>=trap.x+trap.width);
+ tick(g,90);assert.equal(g.pitScene,null);assert.equal(p.x,safe);assert.equal(p.y,0);
+ g.updateBoss=()=>{};tick(g,430);
+ assert.equal(p.hp,132);assert.equal(g.falls,1);assert.equal(p.invincible,0);
+ assert(g.request(p,'jump'));assert(p.vy>0);
+}
+console.log('PASS: supported attack braking, safe boss boundary and spike-free far-bank recovery.');
+
+
